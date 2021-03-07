@@ -35,6 +35,8 @@ src/gtest.exe
 src/fsmap
 src/hdfmt
 src/fdresize
+src/m7makechars
+src/m7makechars.exe
 packages/*
 src/Debug/*
 src/Release/*
@@ -54,3 +56,5 @@ b-em-mg.exe
 enc_temp_folder/
 src/b-em.aps
 *.bak
+.idea
+*.snp
