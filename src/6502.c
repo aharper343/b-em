@@ -457,6 +457,7 @@ static uint32_t do_readmem(uint32_t addr)
         case 0xFE3C:
             if (integra)
                 return cmos_read_data_integra();
+            break;
 
         case 0xFE40:
         case 0xFE44:
@@ -476,7 +477,9 @@ static uint32_t do_readmem(uint32_t addr)
         case 0xFE74:
         case 0xFE78:
         case 0xFE7C:
+            if (!MODELA)
                 return uservia_read((uint16_t)addr);
+            break;
 
         case 0xFE80:
         case 0xFE84:
@@ -510,7 +513,7 @@ static uint32_t do_readmem(uint32_t addr)
         case 0xFEDC:
             if (MASTER)
                 return mmccard_read();
-            else
+            else if (!MODELA)
                 return adc_read((uint16_t)addr);
             break;
 
@@ -566,6 +569,11 @@ static inline void page_rom(int rom_no, int rom_sel, int start, int end)
     }
 }
 
+void m6502_update_swram(void)
+{
+    page_rom(ram_fe30 & 0x0f, romsel, 0x80, 0xc0);
+}
+
 #define INTEGRA_SHEN   0x80
 #define INTEGRA_PRVS1  0x40
 #define INTEGRA_PRVS4  0x20
@@ -593,7 +601,7 @@ static void write_romsel(int val)
             ram1k = ram_fe34 & INTEGRA_PRVS1;
         }
     }
-    RAMbank[0xA] = ram8k ? 1 : 0;
+    RAMbank[0xA] = (ram8k && acccon & 0x80) ? 1 : 0;
     if (ram4k) {
         for (int c = 0x80; c < 0x90; c++) {
             memlook[0][c] = memlook[1][c] = ram;
@@ -617,41 +625,56 @@ static void write_romsel(int val)
 
 static void write_acccon_master(int val)
 {
-    acccon = val;
-    int changes = val ^ ram_fe34;
-    vidbank = (val & 1) ? 0x8000 : 0;
-    if (val & 2)
-        RAMbank[0xC] = RAMbank[0xD] = 1;
-    else
-        RAMbank[0xC] = RAMbank[0xD] = 0;
-    if (changes & 4)
-        shadow_mem(val & 4);
-    if (changes & 8) {
-        if (val & 8) { /* 8K filing system RAM */
-            uint8_t *base = ram - 0x3000;
-            for (int c = 0xc0; c < 0xe0; c++) {
-                memlook[0][c] = memlook[1][c] = base;
-                memstat[0][c] = memstat[1][c] = 1;
-            }
-        }
-        else {
-            uint8_t *base = os - 0xC000;
-            for (int c = 0xc0; c < 0xe0; c++) {
-                memlook[0][c] = memlook[1][c] = base;
-                memstat[0][c] = memstat[1][c] = 2;
-            }
+	acccon = val;
+	vidbank = (val & 1) ? 0x8000 : 0;
+
+	int bank = 0;
+	if (val & 8) { /* 8K filing system RAM */
+		uint8_t *base = ram - 0x3000;
+		for (int c = 0xc0; c < 0xe0; c++) {
+			memlook[0][c] = memlook[1][c] = base;
+			memstat[0][c] = memstat[1][c] = 1;
+		}
+	}
+	else {
+		uint8_t *base = os - 0xC000;
+		for (int c = 0xc0; c < 0xe0; c++) {
+			memlook[0][c] = memlook[1][c] = base;
+			memstat[0][c] = memstat[1][c] = 2;
+		}
+		if (val & 2)
+			bank = 1;
+		if (val & 4)
+			bank = !bank;
+	}
+    uint8_t *shadow = ram + 0x8000;
+    if (val & 4) {
+        for (int c = 0x30; c < 0x80; c++) {
+            memlook[0][c] = shadow;
+            memlook[1][c] = ram;
         }
     }
+    else {
+        for (int c = 0x30; c < 0x80; c++) {
+            memlook[0][c] = ram;
+            memlook[1][c] = shadow;
+        }
+    }        
+	RAMbank[0xC] = RAMbank[0xD] = bank;
 }
 
 static void write_acccon_bplus(int val)
 {
     acccon = val;
     vidbank = (val & 0x80) << 8;
-    if (val & 0x80)
+    if (val & 0x80) {
+        RAMbank[0xA] = ram8k ? 1 : 0;
         RAMbank[0xC] = RAMbank[0xD] = 1;
-    else
+    }
+    else {
+        RAMbank[0xA] = 0;
         RAMbank[0xC] = RAMbank[0xD] = 0;
+    }
 }
 
 static void write_acccon_integra(int val)
@@ -872,8 +895,9 @@ static void do_writemem(uint32_t addr, uint32_t val)
         case 0xFE74:
         case 0xFE78:
         case 0xFE7C:
+            if (!MODELA)
                 uservia_write((uint16_t)addr, (uint8_t)val);
-                break;
+            break;
 
         case 0xFE80:
         case 0xFE84:
@@ -902,13 +926,13 @@ static void do_writemem(uint32_t addr, uint32_t val)
         case 0xFED0:
         case 0xFED4:
         case 0xFED8:
-                if (!MASTER)
-                        adc_write((uint16_t)addr, (uint8_t)val);
-                break;
+            if (!MASTER && !MODELA)
+                adc_write((uint16_t)addr, (uint8_t)val);
+            break;
         case 0xFEDC:
             if (MASTER)
                 mmccard_write(val);
-            else
+            else if (!MODELA)
                 adc_write((uint16_t)addr, (uint8_t)val);
             break;
 
