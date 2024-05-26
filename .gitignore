@@ -36,7 +36,8 @@ src/fsmap
 src/hdfmt
 src/fdresize
 src/m7makechars
-src/m7makechars.exe
+src/vdfs6
+src/wildtest
 packages/*
 src/Debug/*
 src/Release/*
@@ -47,6 +48,7 @@ b-em.pdb
 src/hdfmt.exe
 scsi/*
 src/sdf2imd
+src/bsnapdump
 *.exe
 *.sublime-project
 *.sublime-workspace
@@ -56,5 +58,7 @@ b-em-mg.exe
 enc_temp_folder/
 src/b-em.aps
 *.bak
-.idea
-*.snp
+build-w32/
+build-w64/
+.idea/
+*.iml
